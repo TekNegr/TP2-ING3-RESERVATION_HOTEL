@@ -42,5 +42,7 @@ public class User {
         this.password = password;
     }
 
-
+    public Boolean verifyPassword(String inputPassword) {
+        return this.password.equals(inputPassword);
+    }
 }

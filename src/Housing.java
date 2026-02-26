@@ -1,5 +1,6 @@
 import java.util.Date;
 import java.util.Dictionary;
+import java.util.Hashtable;
 
 public class Housing {
     private String name;
@@ -13,21 +14,26 @@ public class Housing {
     private Amenity[] amenities;
     private Rating[] ratings;
     private double avgRating;
+    private int id;
+    private User owner;
 
     public Housing(String name, String adress, 
             HousingType type, int maxCapacity, 
             double pricePerNight,String description,
-            Reservation[] reservations, Amenity[] amenities, Rating[] ratings)
+            Reservation[] reservations, Amenity[] amenities, Rating[] ratings,
+            User owner)
     {
         this.name = name;
         this.adress = adress;
         this.type = type;
         this.maxCapacity = maxCapacity;
+        this.owner = owner;
         this.pricePerNight = pricePerNight;
         this.description = description;
         this.reservations = reservations;
         this.amenities = amenities;
         this.ratings = ratings;
+        this.availabilityCalendar = new Hashtable<>();
         for (Reservation reservation : reservations) {
             Date start = reservation.reservationDates()[0];
             Date end = reservation.reservationDates()[1];
@@ -35,6 +41,18 @@ public class Housing {
                 availabilityCalendar.put(date, false);
             }
         }
+    }
+
+    public User getOwner() {
+        return owner;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
     }
 
     // Getter Setters 
@@ -86,6 +104,7 @@ public class Housing {
     }
 
     public double calculateAvgRating() {
+        if (ratings == null || ratings.length == 0) return 0.0;
         double total = 0;
         for (Rating rating : ratings) {
             total += rating.getScore();
