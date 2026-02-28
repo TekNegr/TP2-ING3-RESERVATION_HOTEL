@@ -1,6 +1,9 @@
+package Assets;
+
 public class Amenity {
     private String name;
     private String description;
+
     public Amenity(String name, String description) {
         this.name = name;
         this.description = description;
@@ -12,14 +15,13 @@ public class Amenity {
 
     public String getDescription() {
         return description;
-    }   
+    }
 
     public void setName(String name) {
         this.name = name;
-    }   
+    }
 
     public void setDescription(String description) {
         this.description = description;
     }
-
 }

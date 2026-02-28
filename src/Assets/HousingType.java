@@ -1,7 +1,9 @@
+package Assets;
+
 public enum HousingType {
+    HOTEL,
+    APARTMENT,
     HOUSE,
-    APARTEMENT,
-    CONDO,
     VILLA,
     CABIN
 }
