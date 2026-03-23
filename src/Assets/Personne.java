@@ -2,7 +2,7 @@ package Assets;
 
 import java.time.LocalDateTime;
 
-public abstract class Personne {
+public abstract class Personne implements Comparable<Personne> {
     private String firstName;
     private String lastName;
     private String email;
@@ -15,6 +15,14 @@ public abstract class Personne {
         this.email = email;
         this.password = password;
         this.createdAt = LocalDateTime.now();
+    }
+
+    protected Personne(Personne other) {
+        this.firstName = other.firstName;
+        this.lastName = other.lastName;
+        this.email = other.email;
+        this.password = other.password;
+        this.createdAt = other.createdAt;
     }
 
     public String getFirstName() {
@@ -56,4 +64,24 @@ public abstract class Personne {
     public void setPassword(String password) {
         this.password = password;
     }
+
+    @Override
+    public String toString() {
+        return "Personne{firstName='" + firstName + "', lastName='" + lastName
+                + "', email='" + email + "', createdAt=" + createdAt + "}";
+    }
+
+    @Override
+    public int compareTo(Personne other) {
+        if (other == null) {
+            return 1;
+        }
+        int byCreatedAt = this.createdAt.compareTo(other.createdAt);
+        if (byCreatedAt != 0) {
+            return byCreatedAt;
+        }
+        return this.email.compareToIgnoreCase(other.email);
+    }
+
+    public abstract void afficher();
 }

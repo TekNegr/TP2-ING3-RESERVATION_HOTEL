@@ -21,6 +21,7 @@ public class Housing {
     private final Set<LocalDate> unavailableDates;
 
     public Housing(String name, String address, HousingType type, int maxCapacity, double pricePerNight, String description, Client owner) {
+        validateBasics(name, address, type, maxCapacity, pricePerNight, owner);
         this.name = name;
         this.address = address;
         this.type = type;
@@ -70,22 +71,37 @@ public class Housing {
     }
 
     public void setName(String name) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Housing name is required.");
+        }
         this.name = name;
     }
 
     public void setAddress(String address) {
+        if (address == null || address.isBlank()) {
+            throw new IllegalArgumentException("Housing address is required.");
+        }
         this.address = address;
     }
 
     public void setType(HousingType type) {
+        if (type == null) {
+            throw new IllegalArgumentException("Housing type is required.");
+        }
         this.type = type;
     }
 
     public void setMaxCapacity(int maxCapacity) {
+        if (maxCapacity <= 0) {
+            throw new IllegalArgumentException("Max capacity must be greater than 0.");
+        }
         this.maxCapacity = maxCapacity;
     }
 
     public void setPricePerNight(double pricePerNight) {
+        if (pricePerNight <= 0) {
+            throw new IllegalArgumentException("Price per night must be greater than 0.");
+        }
         this.pricePerNight = pricePerNight;
     }
 
@@ -102,15 +118,17 @@ public class Housing {
     }
 
     public void addAmenity(Amenity amenity) {
-        if (amenity != null) {
-            amenities.add(amenity);
+        if (amenity == null) {
+            throw new IllegalArgumentException("Amenity cannot be null.");
         }
+        amenities.add(amenity);
     }
 
     public void addRating(Rating rating) {
-        if (rating != null) {
-            ratings.add(rating);
+        if (rating == null) {
+            throw new IllegalArgumentException("Rating cannot be null.");
         }
+        ratings.add(rating);
     }
 
     public double getAverageRating() {
@@ -123,15 +141,13 @@ public class Housing {
     }
 
     public double calculateStayPrice(LocalDate startDate, LocalDate endDate) {
+        validatePeriod(startDate, endDate);
         long nights = ChronoUnit.DAYS.between(startDate, endDate);
-        if (nights < 0) return 0.0;
         return nights * pricePerNight;
     }
 
     public boolean isAvailable(LocalDate startDate, LocalDate endDate) {
-        if (startDate == null || endDate == null || !startDate.isBefore(endDate)) {
-            return false;
-        }
+        validatePeriod(startDate, endDate);
         LocalDate cursor = startDate;
         while (cursor.isBefore(endDate)) {
             if (unavailableDates.contains(cursor)) return false;
@@ -141,6 +157,7 @@ public class Housing {
     }
 
     public void addUnavailablePeriod(LocalDate startDate, LocalDate endDate) {
+        validatePeriod(startDate, endDate);
         LocalDate cursor = startDate;
         while (cursor.isBefore(endDate)) {
             unavailableDates.add(cursor);
@@ -149,6 +166,7 @@ public class Housing {
     }
 
     public void removeUnavailablePeriod(LocalDate startDate, LocalDate endDate) {
+        validatePeriod(startDate, endDate);
         LocalDate cursor = startDate;
         while (cursor.isBefore(endDate)) {
             unavailableDates.remove(cursor);
@@ -193,5 +211,35 @@ public class Housing {
             }
         }
         return builder.toString();
+    }
+
+    private void validateBasics(String name, String address, HousingType type, int maxCapacity, double pricePerNight, Client owner) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Housing name is required.");
+        }
+        if (address == null || address.isBlank()) {
+            throw new IllegalArgumentException("Housing address is required.");
+        }
+        if (type == null) {
+            throw new IllegalArgumentException("Housing type is required.");
+        }
+        if (maxCapacity <= 0) {
+            throw new IllegalArgumentException("Max capacity must be greater than 0.");
+        }
+        if (pricePerNight <= 0) {
+            throw new IllegalArgumentException("Price per night must be greater than 0.");
+        }
+        if (owner == null) {
+            throw new IllegalArgumentException("Housing owner is required.");
+        }
+    }
+
+    private void validatePeriod(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            throw new IllegalArgumentException("Start and end dates are required.");
+        }
+        if (!startDate.isBefore(endDate)) {
+            throw new IllegalArgumentException("Start date must be before end date.");
+        }
     }
 }

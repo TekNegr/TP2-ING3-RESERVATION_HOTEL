@@ -14,4 +14,11 @@ public class NouveauClient extends Client {
     public String getClientType() {
         return "NOUVEAU_CLIENT";
     }
+
+    @Override
+    public void afficher() {
+        super.afficher();
+        System.out.println("--- Loyalty & Discount ---");
+        System.out.println("  Discount rate : none (new customer, no history)");
+    }
 }

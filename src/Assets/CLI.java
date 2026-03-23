@@ -1,7 +1,10 @@
 package Assets;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 
 public class CLI {
@@ -66,7 +69,7 @@ public class CLI {
                     handleRemoveAmenity(args);
                     break;
                 case "list_housings":
-                    handleListHousings();
+                    handleListHousings(args);
                     break;
                 case "list_users":
                     handleListUsers();
@@ -109,6 +112,9 @@ public class CLI {
                     break;
                 case "get_reservations_by_housing_address":
                     handleGetReservationsByHousingAddress(args);
+                    break;
+                case "get_client_by_email":
+                    handleGetClientByEmail(args);
                     break;
                 case "exit":
                     running = false;
@@ -153,7 +159,7 @@ public class CLI {
             System.out.println("  rate_house <housingId> <score(1-5)> <comment>");
             System.out.println("  delete_account");
         }
-        System.out.println("  list_housings");
+        System.out.println("  list_housings [name=<text>] [address=<text>] [type=<type>] [min_capacity=<n>] [max_price=<n>] [min_rating=<n>] [available_from=<YYYY-MM-DD>] [available_to=<YYYY-MM-DD>]");
         System.out.println("  list_users");
         System.out.println("  list_reservations");
         System.out.println("  get_housing_by_id <id>");
@@ -162,6 +168,7 @@ public class CLI {
         System.out.println("  get_reservation_by_id <id>");
         System.out.println("  get_reservations_by_housing_name <name>");
         System.out.println("  get_reservations_by_housing_address <address>");
+        System.out.println("  get_client_by_email <email>");
         System.out.println("  exit");
     }
 
@@ -175,12 +182,20 @@ public class CLI {
         String lastName = toks[1].trim();
         String email = toks[2].trim();
         String password = toks[3].trim();
-        if (db.findClientByEmail(email) != null) {
-            System.out.println("Email already exists.");
+        if (firstName.isBlank() || lastName.isBlank() || email.isBlank() || password.isBlank()) {
+            System.out.println("All fields are required.");
             return;
         }
-        db.addClient(new NouveauClient(firstName, lastName, email, password));
-        System.out.println("NouveauClient registered: " + email);
+        try {
+            if (db.findClientByEmail(email) != null) {
+                System.out.println("Email already exists.");
+                return;
+            }
+            db.addClient(new NouveauClient(firstName, lastName, email, password));
+            System.out.println("NouveauClient registered: " + email);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Cannot register user: " + e.getMessage());
+        }
     }
 
     private void handleRegisterOld(String args) {
@@ -193,12 +208,20 @@ public class CLI {
         String lastName = toks[1].trim();
         String email = toks[2].trim();
         String password = toks[3].trim();
-        if (db.findClientByEmail(email) != null) {
-            System.out.println("Email already exists.");
+        if (firstName.isBlank() || lastName.isBlank() || email.isBlank() || password.isBlank()) {
+            System.out.println("All fields are required.");
             return;
         }
-        db.addClient(new AncienClient(firstName, lastName, email, password));
-        System.out.println("AncienClient registered: " + email);
+        try {
+            if (db.findClientByEmail(email) != null) {
+                System.out.println("Email already exists.");
+                return;
+            }
+            db.addClient(new AncienClient(firstName, lastName, email, password));
+            System.out.println("AncienClient registered: " + email);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Cannot register user: " + e.getMessage());
+        }
     }
 
     private void handleLogin(String args) {
@@ -207,13 +230,17 @@ public class CLI {
             System.out.println("Usage: login <email> <password>");
             return;
         }
-        Client authenticated = db.authenticate(toks[0].trim(), toks[1].trim());
-        if (authenticated == null) {
-            System.out.println("Invalid credentials.");
-            return;
+        try {
+            Client authenticated = db.authenticate(toks[0].trim(), toks[1].trim());
+            if (authenticated == null) {
+                System.out.println("Invalid credentials.");
+                return;
+            }
+            currentClient = authenticated;
+            System.out.println("Logged in as " + currentClient.getFullName() + " (" + currentClient.getClientType() + ")");
+        } catch (IllegalArgumentException e) {
+            System.out.println("Cannot login: " + e.getMessage());
         }
-        currentClient = authenticated;
-        System.out.println("Logged in as " + currentClient.getFullName() + " (" + currentClient.getClientType() + ")");
     }
 
     private void handleMe() {
@@ -221,10 +248,7 @@ public class CLI {
             System.out.println("Not logged in.");
             return;
         }
-        System.out.println("Name: " + currentClient.getFullName());
-        System.out.println("Email: " + currentClient.getEmail());
-        System.out.println("Type: " + currentClient.getClientType());
-        System.out.println("Discount: " + (int) (currentClient.getDiscountRate() * 100) + "%");
+        currentClient.afficher();
     }
 
     private void handleAddHousing(String args) {
@@ -248,7 +272,7 @@ public class CLI {
             Housing housing = new Housing(name, address, type, maxCapacity, price, description, currentClient);
             db.addHousing(housing);
             System.out.println("Housing added with id=" + housing.getId());
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
             System.out.println("Cannot add housing: " + e.getMessage());
         }
     }
@@ -272,8 +296,10 @@ public class CLI {
             int cancelled = db.cancelFutureReservationsForHousing(housing, LocalDate.now());
             db.removeHousing(housing);
             System.out.println("Housing removed. Future reservations cancelled: " + cancelled);
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             System.out.println("Usage: remove_housing <housingId>");
+        } catch (IllegalArgumentException e) {
+            System.out.println("Cannot remove housing: " + e.getMessage());
         }
     }
 
@@ -306,7 +332,7 @@ public class CLI {
             housing.setPricePerNight(Double.parseDouble(toks[5].trim()));
             housing.setDescription(toks[6].trim());
             System.out.println("Housing updated: id=" + housing.getId());
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
             System.out.println("Cannot edit housing: " + e.getMessage());
         }
     }
@@ -343,7 +369,7 @@ public class CLI {
             }
             housing.addAmenity(new Amenity(amenityName, description));
             System.out.println("Amenity added to housing #" + housingId + ": " + amenityName);
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
             System.out.println("Cannot add amenity: " + e.getMessage());
         }
     }
@@ -395,7 +421,7 @@ public class CLI {
             target.setName(newAmenityName);
             target.setDescription(newDescription);
             System.out.println("Amenity updated for housing #" + housingId + ": " + oldAmenityName + " -> " + newAmenityName);
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
             System.out.println("Cannot edit amenity: " + e.getMessage());
         }
     }
@@ -430,7 +456,7 @@ public class CLI {
                 return;
             }
             System.out.println("Amenity removed from housing #" + housingId + ": " + amenityName);
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
             System.out.println("Cannot remove amenity: " + e.getMessage());
         }
     }
@@ -450,15 +476,127 @@ public class CLI {
         }
     }
 
-    private void handleListHousings() {
+    private void handleListHousings(String args) {
         List<Housing> list = db.listHousings();
         if (list.isEmpty()) {
             System.out.println("No housing available.");
             return;
         }
-        for (Housing housing : list) {
-            System.out.println(housing.getSummary());
+
+        Map<String, String> filters = parseListHousingFilters(args);
+        if (filters == null) {
+            return;
         }
+
+        try {
+            String nameFilter = filters.getOrDefault("name", "").toLowerCase();
+            String addressFilter = filters.getOrDefault("address", "").toLowerCase();
+            HousingType typeFilter = filters.containsKey("type") ? parseHousingType(filters.get("type")) : null;
+
+            int minCapacity = filters.containsKey("min_capacity")
+                    ? Integer.parseInt(filters.get("min_capacity"))
+                    : Integer.MIN_VALUE;
+            double maxPrice = filters.containsKey("max_price")
+                    ? Double.parseDouble(filters.get("max_price"))
+                    : Double.MAX_VALUE;
+            double minRating = filters.containsKey("min_rating")
+                    ? Double.parseDouble(filters.get("min_rating"))
+                    : 0.0;
+
+            LocalDate availableFrom = null;
+            LocalDate availableTo = null;
+            boolean hasFrom = filters.containsKey("available_from");
+            boolean hasTo = filters.containsKey("available_to");
+            if (hasFrom != hasTo) {
+                System.out.println("Use available_from and available_to together.");
+                System.out.println("Example: list_housings available_from=2026-07-01 available_to=2026-07-05");
+                return;
+            }
+            if (hasFrom) {
+                availableFrom = LocalDate.parse(filters.get("available_from"));
+                availableTo = LocalDate.parse(filters.get("available_to"));
+                if (!availableFrom.isBefore(availableTo)) {
+                    System.out.println("available_from must be before available_to.");
+                    return;
+                }
+            }
+
+            int matched = 0;
+            for (Housing housing : list) {
+                if (!nameFilter.isEmpty() && !housing.getName().toLowerCase().contains(nameFilter)) {
+                    continue;
+                }
+                if (!addressFilter.isEmpty() && !housing.getAddress().toLowerCase().contains(addressFilter)) {
+                    continue;
+                }
+                if (typeFilter != null && housing.getType() != typeFilter) {
+                    continue;
+                }
+                if (housing.getMaxCapacity() < minCapacity) {
+                    continue;
+                }
+                if (housing.getPricePerNight() > maxPrice) {
+                    continue;
+                }
+                if (housing.getAverageRating() < minRating) {
+                    continue;
+                }
+                if (availableFrom != null && !housing.isAvailable(availableFrom, availableTo)) {
+                    continue;
+                }
+
+                System.out.println(housing.getSummary());
+                matched++;
+            }
+
+            if (matched == 0) {
+                System.out.println("No housing matches your filters.");
+            }
+        } catch (DateTimeParseException e) {
+            System.out.println("Invalid date in filters. Use YYYY-MM-DD.");
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid number in filters: " + e.getMessage());
+            System.out.println("Example: list_housings min_capacity=3 max_price=120 min_rating=4.2");
+        } catch (IllegalArgumentException e) {
+            System.out.println("Cannot list housings with filters: " + e.getMessage());
+        }
+    }
+
+    private Map<String, String> parseListHousingFilters(String args) {
+        Map<String, String> filters = new HashMap<>();
+        if (args == null || args.isBlank()) {
+            return filters;
+        }
+
+        String[] tokens = args.trim().split("\\s+");
+        for (String token : tokens) {
+            String[] pair = token.split("=", 2);
+            if (pair.length != 2 || pair[0].isBlank() || pair[1].isBlank()) {
+                System.out.println("Invalid filter token: '" + token + "'. Expected key=value.");
+                System.out.println("Example: list_housings type=HOTEL max_price=120");
+                return null;
+            }
+
+            String key = pair[0].trim().toLowerCase();
+            String value = pair[1].trim();
+
+            if (!key.equals("name")
+                    && !key.equals("address")
+                    && !key.equals("type")
+                    && !key.equals("min_capacity")
+                    && !key.equals("max_price")
+                    && !key.equals("min_rating")
+                    && !key.equals("available_from")
+                    && !key.equals("available_to")) {
+                System.out.println("Unknown filter key: " + key);
+                System.out.println("Allowed keys: name, address, type, min_capacity, max_price, min_rating, available_from, available_to");
+                return null;
+            }
+
+            filters.put(key, value);
+        }
+
+        return filters;
     }
 
     private void handleListUsers() {
@@ -508,7 +646,9 @@ public class CLI {
             db.addReservation(reservation);
             System.out.println("Reservation created as PENDING: " + reservation.getDetails());
             System.out.println("Owner must confirm with: confirm_reservation " + reservation.getId());
-        } catch (Exception e) {
+        } catch (DateTimeParseException e) {
+            System.out.println("Cannot create reservation: invalid date format (use YYYY-MM-DD).");
+        } catch (IllegalArgumentException | IllegalStateException e) {
             System.out.println("Cannot create reservation: " + e.getMessage());
         }
     }
@@ -535,8 +675,8 @@ public class CLI {
                 System.out.println("Reservation not found.");
                 return;
             }
-            if (reservation.getClient() != currentClient || reservation.getHousing().getOwner() != currentClient) {
-                System.out.println("You can only edit your own reservation.");
+            if (reservation.getClient() != currentClient && reservation.getHousing().getOwner() != currentClient) {
+                System.out.println("Only reservation client or housing owner can edit.");
                 return;
             }
             if (reservation.getStatus() == ReservationStatus.CANCELLED) {
@@ -581,7 +721,9 @@ public class CLI {
             }
 
             System.out.println("Reservation updated: " + reservation.getDetails());
-        } catch (Exception e) {
+        } catch (DateTimeParseException e) {
+            System.out.println("Cannot edit reservation: invalid date format (use YYYY-MM-DD).");
+        } catch (IllegalArgumentException | IllegalStateException e) {
             System.out.println("Cannot edit reservation: " + e.getMessage());
         }
     }
@@ -618,8 +760,10 @@ public class CLI {
             reservation.confirm();
             housing.addUnavailablePeriod(reservation.getStartDate(), reservation.getEndDate());
             System.out.println("Reservation confirmed: #" + reservation.getId());
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             System.out.println("Usage: confirm_reservation <reservationId>");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Cannot confirm reservation: " + e.getMessage());
         }
     }
 
@@ -648,8 +792,10 @@ public class CLI {
             reservation.cancel();
             reservation.getHousing().removeUnavailablePeriod(reservation.getStartDate(), reservation.getEndDate());
             System.out.println("Reservation cancelled: #" + reservation.getId());
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             System.out.println("Usage: cancel_reservation <reservationId>");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Cannot cancel reservation: " + e.getMessage());
         }
     }
 
@@ -691,7 +837,7 @@ public class CLI {
             Rating rating = new Rating(currentClient, housing, score, comment, LocalDate.now());
             housing.addRating(rating);
             System.out.println("Rating added: " + rating.getDetails());
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
             System.out.println("Cannot add rating: " + e.getMessage());
         }
     }
@@ -742,8 +888,10 @@ public class CLI {
                 return;
             }
             System.out.println(housing.getDetails());
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             System.out.println("Usage: get_housing_by_id <id>");
+        } catch (IllegalArgumentException e) {
+            System.out.println("Cannot get housing: " + e.getMessage());
         }
     }
 
@@ -784,8 +932,10 @@ public class CLI {
                 return;
             }
             System.out.println(reservation.getDetails());
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             System.out.println("Usage: get_reservation_by_id <id>");
+        } catch (IllegalArgumentException e) {
+            System.out.println("Cannot get reservation: " + e.getMessage());
         }
     }
 
@@ -803,6 +953,20 @@ public class CLI {
         for (Reservation reservation : list) {
             System.out.println(reservation.getDetails());
         }
+    }
+
+    private void handleGetClientByEmail(String args) {
+        String email = args.trim();
+        if (email.isEmpty()) {
+            System.out.println("Usage: get_client_by_email <email>");
+            return;
+        }
+        Client client = db.findClientByEmail(email);
+        if (client == null) {
+            System.out.println("Client not found for email: " + email);
+            return;
+        }
+        client.afficher();
     }
 
     private void handleGetReservationsByHousingAddress(String args) {

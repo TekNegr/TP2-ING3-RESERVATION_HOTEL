@@ -31,10 +31,19 @@ public class Database {
     }
 
     public void addClient(Client client) {
-        if (client != null) clients.add(client);
+        if (client == null) {
+            throw new IllegalArgumentException("Client cannot be null.");
+        }
+        if (findClientByEmail(client.getEmail()) != null) {
+            throw new IllegalStateException("A client with this email already exists.");
+        }
+        clients.add(client);
     }
 
     public Client findClientByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email is required.");
+        }
         for (Client client : clients) {
             if (client.getEmail().equalsIgnoreCase(email)) return client;
         }
@@ -42,6 +51,12 @@ public class Database {
     }
 
     public Client authenticate(String email, String password) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email is required.");
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Password is required.");
+        }
         Client client = findClientByEmail(email);
         if (client != null && client.verifyPassword(password)) return client;
         return null;
@@ -52,9 +67,13 @@ public class Database {
     }
 
     public void addHousing(Housing housing) {
-        if (housing != null) {
-            housing.setId(nextHousingId++);
-            housings.add(housing);
+        if (housing == null) {
+            throw new IllegalArgumentException("Housing cannot be null.");
+        }
+        housing.setId(nextHousingId++);
+        housings.add(housing);
+        if (housing.getOwner() != null) {
+            housing.getOwner().addOwnedHousing(housing);
         }
     }
 
@@ -63,10 +82,17 @@ public class Database {
     }
 
     public boolean removeHousing(Housing housing) {
-        return housings.remove(housing);
+        boolean removed = housings.remove(housing);
+        if (removed && housing.getOwner() != null) {
+            housing.getOwner().removeOwnedHousing(housing);
+        }
+        return removed;
     }
 
     public Housing getHousingById(int id) {
+        if (id <= 0) {
+            throw new IllegalArgumentException("Housing id must be greater than 0.");
+        }
         for (Housing housing : housings) if (housing.getId() == id) return housing;
         return null;
     }
@@ -84,16 +110,21 @@ public class Database {
     }
 
     public void addReservation(Reservation reservation) {
-        if (reservation != null) {
-            reservation.setId(nextReservationId++);
-            reservations.add(reservation);
-            if (reservation.getClient() instanceof AncienClient ancienClient) {
-                ancienClient.recordReservation();
-            }
+        if (reservation == null) {
+            throw new IllegalArgumentException("Reservation cannot be null.");
+        }
+        reservation.setId(nextReservationId++);
+        reservations.add(reservation);
+        reservation.getClient().addMyReservation(reservation);
+        if (reservation.getClient() instanceof AncienClient ancienClient) {
+            ancienClient.recordReservation();
         }
     }
 
     public Reservation getReservationById(int id) {
+        if (id <= 0) {
+            throw new IllegalArgumentException("Reservation id must be greater than 0.");
+        }
         for (Reservation reservation : reservations) if (reservation.getId() == id) return reservation;
         return null;
     }
@@ -123,6 +154,12 @@ public class Database {
     }
 
     public int cancelFutureReservationsForHousing(Housing housing, LocalDate today) {
+        if (housing == null) {
+            throw new IllegalArgumentException("Housing is required.");
+        }
+        if (today == null) {
+            throw new IllegalArgumentException("Current date is required.");
+        }
         int cancelled = 0;
         for (Reservation reservation : reservations) {
             if (reservation.getHousing() == null || reservation.getHousing() != housing) continue;
@@ -138,6 +175,12 @@ public class Database {
     }
 
     public int cancelFutureReservationsForClient(Client client, LocalDate today) {
+        if (client == null) {
+            throw new IllegalArgumentException("Client is required.");
+        }
+        if (today == null) {
+            throw new IllegalArgumentException("Current date is required.");
+        }
         int cancelled = 0;
         for (Reservation reservation : reservations) {
             if (reservation.getClient() == null || reservation.getClient() != client) continue;
@@ -153,6 +196,12 @@ public class Database {
     }
 
     public int cancelFutureReservationsForOwner(Client owner, LocalDate today) {
+        if (owner == null) {
+            throw new IllegalArgumentException("Owner is required.");
+        }
+        if (today == null) {
+            throw new IllegalArgumentException("Current date is required.");
+        }
         int cancelled = 0;
         for (Reservation reservation : reservations) {
             Housing housing = reservation.getHousing();
@@ -169,6 +218,9 @@ public class Database {
     }
 
     public List<Housing> getHousingsByOwner(Client owner) {
+        if (owner == null) {
+            throw new IllegalArgumentException("Owner is required.");
+        }
         List<Housing> output = new ArrayList<>();
         for (Housing housing : housings) {
             if (housing.getOwner() == owner) output.add(housing);
@@ -177,6 +229,9 @@ public class Database {
     }
 
     public boolean removeClient(Client client) {
+        if (client == null) {
+            throw new IllegalArgumentException("Client cannot be null.");
+        }
         return clients.remove(client);
     }
 }
