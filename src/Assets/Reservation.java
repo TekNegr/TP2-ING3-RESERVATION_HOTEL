@@ -1,9 +1,12 @@
 package Assets;
 
+import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-public class Reservation {
+public class Reservation implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private int id;
     private Client client;
     private Housing housing;
@@ -40,8 +43,22 @@ public class Reservation {
         return client;
     }
 
+    public void setClient(Client client) {
+        if (client == null) {
+            throw new IllegalArgumentException("Client is required.");
+        }
+        this.client = client;
+    }
+
     public Housing getHousing() {
         return housing;
+    }
+
+    public void setHousing(Housing housing) {
+        if (housing == null) {
+            throw new IllegalArgumentException("Housing is required.");
+        }
+        this.housing = housing;
     }
 
     public LocalDate getStartDate() {

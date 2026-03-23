@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Client extends Personne {
+    private static final long serialVersionUID = 1L;
+
     private final LocalDate registrationDate;
     private int loyaltyPoints;
     private final List<Housing> ownedHousings = new ArrayList<>();

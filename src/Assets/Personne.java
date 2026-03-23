@@ -1,8 +1,11 @@
 package Assets;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
-public abstract class Personne implements Comparable<Personne> {
+public abstract class Personne implements Comparable<Personne>, Serializable {
+    private static final long serialVersionUID = 1L;
+
     private String firstName;
     private String lastName;
     private String email;

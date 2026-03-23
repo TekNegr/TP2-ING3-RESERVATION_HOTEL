@@ -1,5 +1,6 @@
 package Assets;
 
+import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -7,7 +8,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class Housing {
+public class Housing implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private int id;
     private String name;
     private String address;
@@ -68,6 +71,13 @@ public class Housing {
 
     public Client getOwner() {
         return owner;
+    }
+
+    public void setOwner(Client owner) {
+        if (owner == null) {
+            throw new IllegalArgumentException("Housing owner is required.");
+        }
+        this.owner = owner;
     }
 
     public void setName(String name) {

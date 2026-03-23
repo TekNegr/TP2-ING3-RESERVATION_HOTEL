@@ -1,8 +1,11 @@
 package Assets;
 
+import java.io.Serializable;
 import java.time.LocalDate;
 
-public class Rating {
+public class Rating implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private Client client;
     private Housing housing;
     private int score;

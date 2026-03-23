@@ -1,20 +1,28 @@
 package Assets;
 
+import java.io.IOException;
+import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class CLI {
     private final Database db;
     private final Scanner scanner;
+    private final HousingTextRepository housingTextRepository;
+    private final SerializationRepository serializationRepository;
     private Client currentClient;
 
     public CLI(Database db) {
         this.db = db;
         this.scanner = new Scanner(System.in);
+        this.housingTextRepository = new HousingTextRepository();
+        this.serializationRepository = new SerializationRepository();
     }
 
     public void run() {
@@ -92,6 +100,18 @@ public class CLI {
                 case "list_reservations":
                     handleListReservations();
                     break;
+                case "savetotxt":
+                    handleSaveToTxt(args);
+                    break;
+                case "importfromtxt":
+                    handleImportFromTxt(args);
+                    break;
+                case "serialize":
+                    handleSerialize(args);
+                    break;
+                case "import_serial":
+                    handleImportSerial(args);
+                    break;
                 case "delete_account":
                     handleDeleteAccount();
                     break;
@@ -162,6 +182,10 @@ public class CLI {
         System.out.println("  list_housings [name=<text>] [address=<text>] [type=<type>] [min_capacity=<n>] [max_price=<n>] [min_rating=<n>] [available_from=<YYYY-MM-DD>] [available_to=<YYYY-MM-DD>]");
         System.out.println("  list_users");
         System.out.println("  list_reservations");
+        System.out.println("  saveToTxt <path>");
+        System.out.println("  importFromTxt <path>");
+        System.out.println("  serialize <housings|clients|reservations|all> <path>");
+        System.out.println("  import_serial <housings|clients|reservations|all> <path>");
         System.out.println("  get_housing_by_id <id>");
         System.out.println("  get_housing_by_name <name>");
         System.out.println("  get_housing_by_address <address>");
@@ -879,6 +903,231 @@ public class CLI {
         }
     }
 
+    private void handleSaveToTxt(String args) {
+        String path = args == null ? "" : args.trim();
+        if (path.isEmpty()) {
+            System.out.println("Usage: saveToTxt <path>");
+            return;
+        }
+        try {
+            List<Housing> housings = db.listHousings();
+            housingTextRepository.saveToTextFile(housings, path);
+            System.out.println("Saved " + housings.size() + " housing record(s) to: " + path);
+        } catch (IllegalArgumentException | IOException e) {
+            System.out.println("Cannot save housings to txt: " + e.getMessage());
+        }
+    }
+
+    private void handleImportFromTxt(String args) {
+        String path = args == null ? "" : args.trim();
+        if (path.isEmpty()) {
+            System.out.println("Usage: importFromTxt <path>");
+            return;
+        }
+        try {
+            List<HousingTextRepository.HousingRecord> records = housingTextRepository.loadFromTextFile(path);
+            int imported = 0;
+            for (HousingTextRepository.HousingRecord record : records) {
+                Client owner = resolveOwnerForImportedHousing(record.getOwnerEmail());
+                HousingType type = parseHousingType(record.getType());
+
+                Housing housing = new Housing(
+                        record.getName(),
+                        record.getAddress(),
+                        type,
+                        record.getMaxCapacity(),
+                        record.getPricePerNight(),
+                        record.getDescription(),
+                        owner
+                );
+
+                for (Amenity amenity : record.getAmenities()) {
+                    housing.addAmenity(new Amenity(amenity.getName(), amenity.getDescription()));
+                }
+
+                for (String comment : record.getComments()) {
+                    if (comment != null && !comment.isBlank()) {
+                        housing.addRating(new Rating(owner, housing, 5, comment, LocalDate.now()));
+                    }
+                }
+
+                db.addHousing(housing);
+                imported++;
+            }
+
+            System.out.println("Imported " + imported + " housing record(s) from: " + path);
+        } catch (IllegalArgumentException | IllegalStateException | IOException e) {
+            System.out.println("Cannot import housings from txt: " + e.getMessage());
+        }
+    }
+
+    private void handleSerialize(String args) {
+        String[] tokens = args == null ? new String[0] : args.trim().split("\\s+", 2);
+        if (tokens.length < 2 || tokens[0].isBlank() || tokens[1].isBlank()) {
+            System.out.println("Usage: serialize <housings|clients|reservations|all> <path>");
+            return;
+        }
+
+        String type = tokens[0].trim().toLowerCase();
+        String path = tokens[1].trim();
+
+        try {
+            Serializable payload = buildSerializationPayload(type);
+            serializationRepository.serializeToFile(payload, path);
+            System.out.println("Serialized '" + type + "' to: " + path);
+        } catch (IllegalArgumentException | IllegalStateException | IOException e) {
+            System.out.println("Cannot serialize data: " + e.getMessage());
+        }
+    }
+
+    private void handleImportSerial(String args) {
+        String[] tokens = args == null ? new String[0] : args.trim().split("\\s+", 2);
+        if (tokens.length < 2 || tokens[0].isBlank() || tokens[1].isBlank()) {
+            System.out.println("Usage: import_serial <housings|clients|reservations|all> <path>");
+            return;
+        }
+
+        String type = tokens[0].trim().toLowerCase();
+        String path = tokens[1].trim();
+
+        try {
+            Object payload = serializationRepository.deserializeFromFile(path);
+            int imported = importSerializedPayload(type, payload);
+            System.out.println("Imported " + imported + " object(s) from serialized type '" + type + "': " + path);
+        } catch (IllegalArgumentException | IllegalStateException | IOException | ClassNotFoundException e) {
+            System.out.println("Cannot import serialized data: " + e.getMessage());
+        }
+    }
+
+    private Serializable buildSerializationPayload(String type) {
+        return switch (type) {
+            case "housing", "housings" -> new ArrayList<>(db.listHousings());
+            case "client", "clients", "users" -> new ArrayList<>(db.listClients());
+            case "reservation", "reservations" -> new ArrayList<>(db.listReservations());
+            case "all" -> {
+                HashMap<String, Object> payload = new HashMap<>();
+                payload.put("housings", new ArrayList<>(db.listHousings()));
+                payload.put("clients", new ArrayList<>(db.listClients()));
+                payload.put("reservations", new ArrayList<>(db.listReservations()));
+                yield payload;
+            }
+            default -> throw new IllegalArgumentException("Unknown serialization type: " + type
+                    + ". Use housings, clients, reservations, or all.");
+        };
+    }
+
+    private int importSerializedPayload(String type, Object payload) {
+        return switch (type) {
+            case "housing", "housings" -> importHousingsFromPayload(payload);
+            case "client", "clients", "users" -> importClientsFromPayload(payload);
+            case "reservation", "reservations" -> importReservationsFromPayload(payload);
+            case "all" -> importAllFromPayload(payload);
+            default -> throw new IllegalArgumentException("Unknown serialization type: " + type
+                    + ". Use housings, clients, reservations, or all.");
+        };
+    }
+
+    private int importAllFromPayload(Object payload) {
+        if (!(payload instanceof Map<?, ?> mapPayload)) {
+            throw new IllegalArgumentException("Invalid serialized payload for type 'all'.");
+        }
+
+        int imported = 0;
+        imported += importClientsFromPayload(mapPayload.get("clients"));
+        imported += importHousingsFromPayload(mapPayload.get("housings"));
+        imported += importReservationsFromPayload(mapPayload.get("reservations"));
+        return imported;
+    }
+
+    private int importClientsFromPayload(Object payload) {
+        if (!(payload instanceof List<?> rawList)) {
+            throw new IllegalArgumentException("Expected a serialized list of clients.");
+        }
+
+        int imported = 0;
+        for (Object item : rawList) {
+            if (!(item instanceof Client client)) {
+                continue;
+            }
+
+            Client existing = safeFindClientByEmail(client.getEmail());
+            if (existing != null) {
+                continue;
+            }
+
+            db.addClient(client);
+            imported++;
+        }
+        return imported;
+    }
+
+    private int importHousingsFromPayload(Object payload) {
+        if (!(payload instanceof List<?> rawList)) {
+            throw new IllegalArgumentException("Expected a serialized list of housings.");
+        }
+
+        int imported = 0;
+        for (Object item : rawList) {
+            if (!(item instanceof Housing housing)) {
+                continue;
+            }
+
+            Client owner = resolveOwnerForImportedHousing(
+                    housing.getOwner() == null ? "" : housing.getOwner().getEmail()
+            );
+            housing.setOwner(owner);
+            db.addHousing(housing);
+            imported++;
+        }
+        return imported;
+    }
+
+    private int importReservationsFromPayload(Object payload) {
+        if (!(payload instanceof List<?> rawList)) {
+            throw new IllegalArgumentException("Expected a serialized list of reservations.");
+        }
+
+        int imported = 0;
+        for (Object item : rawList) {
+            if (!(item instanceof Reservation reservation)) {
+                continue;
+            }
+
+            Client client = reservation.getClient();
+            if (client == null) {
+                continue;
+            }
+
+            Client linkedClient = resolveOwnerForImportedHousing(client.getEmail());
+
+            Housing linkedHousing;
+            Housing reservationHousing = reservation.getHousing();
+            if (reservationHousing == null) {
+                continue;
+            }
+
+            Client linkedOwner = resolveOwnerForImportedHousing(
+                    reservationHousing.getOwner() == null ? "" : reservationHousing.getOwner().getEmail()
+            );
+            reservationHousing.setOwner(linkedOwner);
+            db.addHousing(reservationHousing);
+            linkedHousing = reservationHousing;
+
+            reservation.setClient(linkedClient);
+            reservation.setHousing(linkedHousing);
+            db.addReservation(reservation);
+            imported++;
+        }
+        return imported;
+    }
+
+    private Client safeFindClientByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        return db.findClientByEmail(email);
+    }
+
     private void handleGetHousingById(String args) {
         try {
             int id = Integer.parseInt(args.trim());
@@ -983,5 +1232,54 @@ public class CLI {
         for (Reservation reservation : list) {
             System.out.println(reservation.getDetails());
         }
+    }
+
+    private Client resolveOwnerForImportedHousing(String ownerEmail) {
+        if (ownerEmail == null || ownerEmail.isBlank()) {
+            return getRandomClientOrCreate();
+        }
+
+        Client existing = db.findClientByEmail(ownerEmail.trim());
+        if (existing != null) {
+            return existing;
+        }
+
+        return createImportedClient(ownerEmail.trim());
+    }
+
+    private Client getRandomClientOrCreate() {
+        List<Client> clients = db.listClients();
+        if (!clients.isEmpty()) {
+            int randomIndex = ThreadLocalRandom.current().nextInt(clients.size());
+            return clients.get(randomIndex);
+        }
+        return createImportedClient("");
+    }
+
+    private Client createImportedClient(String preferredEmail) {
+        String email = preferredEmail;
+        if (email == null || email.isBlank() || db.findClientByEmail(email) != null) {
+            int suffix = ThreadLocalRandom.current().nextInt(100000, 999999);
+            email = "imported." + suffix + "@example.com";
+            while (db.findClientByEmail(email) != null) {
+                suffix = ThreadLocalRandom.current().nextInt(100000, 999999);
+                email = "imported." + suffix + "@example.com";
+            }
+        }
+
+        List<String> firstNames = new ArrayList<>(List.of("Alex", "Sam", "Noah", "Mia", "Iris"));
+        List<String> lastNames = new ArrayList<>(List.of("Martin", "Bernard", "Roux", "Petit", "Dupont"));
+
+        int firstIndex = ThreadLocalRandom.current().nextInt(firstNames.size());
+        int lastIndex = ThreadLocalRandom.current().nextInt(lastNames.size());
+
+        Client importedClient = new NouveauClient(
+                firstNames.get(firstIndex),
+                lastNames.get(lastIndex),
+                email,
+                "imported-password"
+        );
+        db.addClient(importedClient);
+        return importedClient;
     }
 }
